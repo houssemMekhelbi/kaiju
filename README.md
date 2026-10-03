@@ -58,8 +58,8 @@ sudo pacman -S --needed $(grep -v '^#' kaiju/packages.txt)
 > Everything it replaces is backed up first.
 
 ```sh
-git clone https://github.com/houssemMekhelbi/hattin-kaiju.git
-cd hattin-kaiju
+git clone https://github.com/houssemMekhelbi/kaiju.git
+cd kaiju
 ./kaiju/restore.sh --dry-run   # show what would change, touch nothing
 ./kaiju/restore.sh             # apply
 ```
