@@ -16,7 +16,7 @@
 
 setopt prompt_subst
 
-KAIJU_DEFAULT_USER=${KAIJU_DEFAULT_USER:-rahal}   # hide context on your own box
+KAIJU_DEFAULT_USER=${KAIJU_DEFAULT_USER:-$USER}   # hide context on your own box
 
 K_RAISED='#221C18' K_EMBER='#9E3B14' K_MAGMA='#FF8A3D'
 K_ASH='#ECE6DA'    K_SPINE='#5FB8FF' K_BLAZE='#FF3B3B'
