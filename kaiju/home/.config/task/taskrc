@@ -1,0 +1,20 @@
+# Taskwarrior. Shown in waybar as "yawm" (~/.local/bin/waybar-yawm):
+#   click        list popup   (~/.local/bin/kaiju-yawm -> kaiju-yawm-menu)
+#   right-click  quick add    (~/.local/bin/kaiju-yawm add)
+# Tasks tagged +note are notes: listed last, never counted in the bar.
+
+data.location=~/.local/share/task
+news.version=3.5.0
+editor=nvim
+weekstart=monday
+
+# Kaiju colours (256-colour approximations): overdue in Blaze, due today in
+# Magma, notes in Spine.
+color.due.today=bold rgb530
+color.due=rgb320
+color.overdue=bold rgb500
+color.tag.note=rgb135
+color.active=rgb135
+color.header=rgb321
+color.label=rgb321
+color.footnote=rgb210

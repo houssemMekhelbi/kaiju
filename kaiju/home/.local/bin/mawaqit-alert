@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+"""Prayer alert banner (Kaiju): a terraced glass plate (14/6) in a cold ash to stone frame on every monitor, above
+fullscreen windows, without taking keyboard focus. Click to dismiss.
+
+    mawaqit-alert '<json>'
+      kind      "adhan" | "iqama"
+      en, ar    prayer name ("Asr", "العصر")
+      time      "17:00"          mosque  "Paris"
+      iqama     "17:10" | null   iqama_ts  epoch of the iqama | null
+      duration  seconds on screen
+Sound: ~/.local/share/mawaqit/sounds/<kind>.wav; MAWAQIT_CHIME=<file> overrides,
+MAWAQIT_CHIME= (empty) silences. Rings again after MAWAQIT_REPEAT seconds (60)
+unless dismissed.
+
+Launched by `waybar-mawaqit watch` (mawaqit-alerts.service). Namespace
+hattin-mawaqit, so hypr/kaiju.lua's ^hattin- layer rule blurs behind it.
+Everything is drawn here with cairo; there are no image files.
+"""
+
+import json
+import math
+import os
+import subprocess
+import sys
+import time
+
+LIB = "/usr/lib/libgtk4-layer-shell.so"
+if LIB not in os.environ.get("LD_PRELOAD", ""):  # must load before libwayland
+    os.environ["LD_PRELOAD"] = f"{LIB} {os.environ.get('LD_PRELOAD', '')}".strip()
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+import gi  # noqa: E402
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk4LayerShell", "1.0")
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+from gi.repository import Gdk, GLib, Gtk, Gtk4LayerShell as LS, Pango, PangoCairo  # noqa: E402
+import cairo  # noqa: E402
+
+SOUNDS = os.path.expanduser("~/.local/share/mawaqit/sounds")  # adhan.wav, iqama.wav (make.py)
+FALLBACK = "/usr/share/sounds/freedesktop/stereo/complete.oga"
+REPEAT = int(os.environ.get("MAWAQIT_REPEAT", "60"))  # seconds until the reminder ring
+
+
+def chime(kind):
+    """MAWAQIT_CHIME overrides (empty = silent); else the bell for this kind."""
+    if "MAWAQIT_CHIME" in os.environ:
+        return os.environ["MAWAQIT_CHIME"]
+    path = os.path.join(SOUNDS, f"{kind}.wav")
+    return path if os.path.exists(path) else FALLBACK
+M = 22                                   # room around the plate for the glow
+W, H = 480, 132                          # the plate (the iqama countdown line needs 480)
+A_STEP, B_STEP = 14, 6                   # the terrace: two steps, top-left and bottom-right
+
+
+def rgb(h):
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+GROUND, SLAG = rgb("0C0B0A"), rgb("161311")
+EMBER, MAGMA = rgb("9E3B14"), rgb("FF8A3D")
+EDGE_HI, EDGE_LO = rgb("CFC6B4"), rgb("5A4E44")     # accent choice E: cold edges, Magma light
+
+CSS = b"""
+window { background: transparent; }
+.card { padding: 26px 28px 12px 112px; }
+.name { font-family: "Big Shoulders Display", sans-serif; font-size: 36px; font-weight: 800;
+        letter-spacing: 1px; text-transform: uppercase; color: #ECE6DA; }
+.ar   { font-family: "Cairo", "IBM Plex Sans Arabic", sans-serif; font-weight: 700; font-size: 22px; color: #FF8A3D; }
+.tag  { font-family: "Archivo", sans-serif; font-weight: 500; font-size: 10px;
+        letter-spacing: 2px; color: #FF8A3D; }
+.sub  { font-family: "Red Hat Mono", monospace; font-size: 12px; color: #A89070; }
+.hint { font-family: "Archivo", sans-serif; font-weight: 500; font-size: 9px;
+        letter-spacing: 2px; color: #7A6656; }
+"""
+
+
+def terrace(cr, x, y, w, h, a=A_STEP, b=B_STEP, grow=0.0):
+    """The plate's outline: two-step cuts top-left and bottom-right; `grow` pushes it outward."""
+    x, y, w, h = x - grow, y - grow, w + 2 * grow, h + 2 * grow
+    pts = [(0, a), (b, a), (b, b), (a, b), (a, 0), (w, 0), (w, h - a), (w - b, h - a), (w - b, h - b), (w - a, h - b), (w - a, h), (0, h)]
+    cr.move_to(x + pts[0][0], y + pts[0][1])
+    for px, py in pts[1:]:
+        cr.line_to(x + px, y + py)
+    cr.close_path()
+
+
+def draw(iqama):
+    """The adhan plate carries the magma glow, the iqama plate does not. The glyph is
+    a dorsal plate: outlined for the adhan, filled with a crack for the iqama."""
+    def fn(_area, cr, w, h):
+        if not iqama:
+            for i in range(32, 0, -1):  # the magma glow, in half-pixel steps so the terrace does not echo
+                terrace(cr, M, M, W, H, grow=i * 0.5)
+                cr.set_source_rgba(*MAGMA, 0.010)
+                cr.fill()
+        terrace(cr, M, M, W, H)
+        cr.set_source_rgba(*SLAG, 1.0)        # opaque: at 0.92 the text behind read through far more than 8%
+        cr.fill()
+        frame = cairo.LinearGradient(M, M, M + W * 0.55, M + H)
+        frame.add_color_stop_rgba(0, *EDGE_HI, 1)
+        frame.add_color_stop_rgba(0.45, *EDGE_LO, 1)
+        frame.add_color_stop_rgba(1, *EDGE_LO, 0.3)
+        terrace(cr, M + 0.5, M + 0.5, W - 1, H - 1)
+        cr.set_source(frame)
+        cr.set_line_width(1)
+        cr.stroke()
+
+        gx, gy = M + 62, M + H / 2          # the glyph's centre
+        cr.move_to(gx, gy - 36)
+        cr.line_to(gx + 30, gy + 32)
+        cr.line_to(gx - 30, gy + 32)
+        cr.close_path()
+        cr.set_source_rgb(*MAGMA)
+        if iqama:
+            cr.fill()
+            cr.move_to(gx, gy - 36)
+            for px, py in ((-3, -8), (4, 4), (-1, 32)):
+                cr.line_to(gx + px, gy + py)
+            cr.set_source_rgb(*GROUND)
+            cr.set_line_width(2)
+            cr.stroke()
+        else:
+            cr.set_line_width(1.6)
+            cr.stroke()
+    return fn
+
+
+def until(ts):
+    s = max(0, int(ts - time.time()))
+    m, s = divmod(s, 60)
+    return f"in {m}m {s:02d}s" if m else f"in {s}s"
+
+
+def build(app, a, monitor):
+    win = Gtk.ApplicationWindow(application=app)
+    LS.init_for_window(win)
+    LS.set_namespace(win, "hattin-mawaqit")
+    LS.set_layer(win, LS.Layer.OVERLAY)
+    LS.set_anchor(win, LS.Edge.TOP, True)
+    LS.set_margin(win, LS.Edge.TOP, 14 - M // 2)
+    LS.set_keyboard_mode(win, LS.KeyboardMode.NONE)
+    LS.set_monitor(win, monitor)
+    win.set_default_size(W + 2 * M, H + 2 * M)
+
+    iqama = a["kind"] == "iqama"
+    area = Gtk.DrawingArea()
+    area.set_content_width(W + 2 * M)
+    area.set_content_height(H + 2 * M)
+    area.set_draw_func(draw(iqama))
+
+    name = Gtk.Label(label=a["en"], xalign=0)
+    name.add_css_class("name")
+    ar = Gtk.Label(label=a["ar"], xalign=0, hexpand=True)
+    ar.add_css_class("ar")
+    tag = Gtk.Label(label="IQAMA" if iqama else "ADHAN", xalign=1, valign=Gtk.Align.START)
+    tag.add_css_class("tag")
+    title = Gtk.Box(spacing=12)
+    title.append(name)
+    title.append(ar)
+    title.append(tag)
+
+    sub = Gtk.Label(xalign=0)
+    sub.add_css_class("sub")
+
+    minutes = max(1, round(int(a.get("duration", 240)) / 60))
+    hint = Gtk.Label(label=f"{minutes} MIN" if iqama else "DISMISS", xalign=1)
+    hint.add_css_class("hint")
+
+    def tick():
+        head = f"{a['mosque']} · {a['time']}"
+        if iqama:
+            sub.set_label(f"{a['mosque']} · {a.get('iqama') or a['time']} · the prayer is starting")
+        elif a.get("iqama_ts") and a["iqama_ts"] > time.time():
+            sub.set_label(f"{head} · iqama {a['iqama']} · {until(a['iqama_ts'])}")
+        elif a.get("iqama"):
+            sub.set_label(f"{head} · iqama {a['iqama']} · now")
+        else:
+            sub.set_label(f"{head} · time for prayer")
+        return True
+    tick()
+    GLib.timeout_add_seconds(1, tick)
+
+    card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, valign=Gtk.Align.START)
+    card.add_css_class("card")
+    card.set_margin_top(M)
+    card.set_margin_start(M)
+    card.set_margin_end(M)
+    for w in (title, sub, hint):
+        card.append(w)
+
+    over = Gtk.Overlay()
+    over.set_child(area)
+    over.add_overlay(card)
+    win.set_child(over)
+
+    click = Gtk.GestureClick()
+    click.connect("pressed", lambda *_: app.quit())
+    win.add_controller(click)
+    win.present()
+
+
+def main():
+    a = json.loads(sys.argv[1])
+    app = Gtk.Application(application_id=None)
+
+    def activate(app):
+        prov = Gtk.CssProvider()
+        prov.load_from_data(CSS)
+        disp = Gdk.Display.get_default()
+        Gtk.StyleContext.add_provider_for_display(disp, prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        mons = disp.get_monitors()
+        for i in range(mons.get_n_items()):
+            build(app, a, mons.get_item(i))
+        app.hold()
+        GLib.timeout_add_seconds(max(30, int(a.get("duration", 300))), app.quit)
+        sound = chime(a["kind"])
+        if sound and os.path.exists(sound):
+            def ring():
+                subprocess.Popen(["pw-play", "--media-role", "Notification", sound],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return False
+            ring()
+            # one reminder if the banner is still up; dismissing quits first
+            GLib.timeout_add_seconds(REPEAT, ring)
+
+    app.connect("activate", activate)
+    app.run([])
+
+
+if __name__ == "__main__":
+    main()

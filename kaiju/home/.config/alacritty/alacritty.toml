@@ -1,0 +1,79 @@
+# Kaiju terminal. Night at 86%, compositor blur behind it.
+
+[window]
+opacity = 0.86
+padding = { x = 16, y = 16 }
+decorations = "None"
+blur = true
+
+[font]
+normal = { family = "Red Hat Mono", style = "Regular" }
+size = 10.5
+offset = { x = 0, y = 4 }
+
+[cursor]
+style = { shape = "Block", blinking = "Off" }
+vi_mode_style = { shape = "Block" }
+thickness = 0.2
+
+[colors.primary]
+background = "#0C0B0A"
+foreground = "#A89070"
+bright_foreground = "#ECE6DA"
+
+[colors.cursor]
+text = "#0C0B0A"
+cursor = "#FF8A3D"
+
+[colors.selection]
+text = "#ECE6DA"
+background = "#221C18"
+
+# Search, hints, the footer bar and the vi-mode cursor in the theme's colours (alacritty's stock ones otherwise).
+[colors.search.matches]
+foreground = "#0C0B0A"
+background = "#5FB8FF"
+
+[colors.search.focused_match]
+foreground = "#0C0B0A"
+background = "#FF8A3D"
+
+[colors.hints.start]
+foreground = "#0C0B0A"
+background = "#FF8A3D"
+
+[colors.hints.end]
+foreground = "#FF8A3D"
+background = "#221C18"
+
+[colors.footer_bar]
+foreground = "#ECE6DA"
+background = "#221C18"
+
+[colors.line_indicator]
+foreground = "#0C0B0A"
+background = "#9E3B14"
+
+[colors.vi_mode_cursor]
+text = "#0C0B0A"
+cursor = "#5FB8FF"
+
+[colors.normal]
+black   = "#0C0B0A"
+red     = "#FF3B3B"
+green   = "#5DA88A"
+yellow  = "#C98A2E"
+blue    = "#4F8FD6"
+magenta = "#B85C8A"
+cyan    = "#5FB8FF"
+white   = "#A89070"
+
+[colors.bright]
+black   = "#7A6656"
+red     = "#FF6B5E"
+green   = "#7FCBA8"
+yellow  = "#E8B45A"
+blue    = "#7FB4FF"
+magenta = "#D98AB0"
+cyan    = "#9AD3FF"
+white   = "#ECE6DA"

@@ -1,0 +1,40 @@
+/* Kaiju for GTK4 / libadwaita: named colours only, so apps keep their own
+ * layout while picking up the palette. The accent is Ember with Ash text
+ * (structure); Magma stays for attention. Destructive and error are Blaze with
+ * Charcoal text, because Ash on Blaze is only 2.8:1. */
+
+@define-color accent_color            #FF8A3D;
+@define-color accent_bg_color         #9E3B14;
+@define-color accent_fg_color         #ECE6DA;
+
+@define-color destructive_color       #FF3B3B;
+@define-color destructive_bg_color    #FF3B3B;
+@define-color destructive_fg_color    #0C0B0A;
+@define-color success_color           #5DA88A;
+@define-color success_bg_color        #5DA88A;
+@define-color warning_color           #E8B45A;
+@define-color warning_bg_color        #C98A2E;
+@define-color warning_fg_color        #0C0B0A;
+@define-color error_color             #FF3B3B;
+@define-color error_bg_color          #FF3B3B;
+
+@define-color window_bg_color         #0C0B0A;
+@define-color window_fg_color         #ECE6DA;
+@define-color view_bg_color           #161311;
+@define-color view_fg_color           #ECE6DA;
+@define-color headerbar_bg_color      #161311;
+@define-color headerbar_fg_color      #ECE6DA;
+@define-color headerbar_border_color  #3A2E26;
+@define-color headerbar_backdrop_color #0C0B0A;
+@define-color sidebar_bg_color        #0C0B0A;
+@define-color sidebar_fg_color        #ECE6DA;
+@define-color sidebar_border_color    #3A2E26;
+@define-color secondary_sidebar_bg_color #0C0B0A;
+@define-color card_bg_color           #161311;
+@define-color card_fg_color           #ECE6DA;
+@define-color dialog_bg_color         #161311;
+@define-color dialog_fg_color         #ECE6DA;
+@define-color popover_bg_color        #161311;
+@define-color popover_fg_color        #ECE6DA;
+@define-color thumbnail_bg_color      #221C18;
+@define-color borders                 #3A2E26;

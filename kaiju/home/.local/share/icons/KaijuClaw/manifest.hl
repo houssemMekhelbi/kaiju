@@ -1,0 +1,4 @@
+name = KaijuClaw
+description = Kaiju: charcoal claw arrow with a Magma edge, a 270 degree arc when busy
+version = 0.1
+cursors_directory = hyprcursors

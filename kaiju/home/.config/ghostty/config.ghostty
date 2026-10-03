@@ -1,0 +1,45 @@
+# Kaiju terminal. Night at 86%, compositor blur behind it.
+
+font-family = Red Hat Mono
+font-family = JetBrainsMono Nerd Font
+font-size = 10.5
+adjust-cell-height = 30%
+window-padding-x = 16
+window-padding-y = 16
+window-decoration = none
+background-opacity = 0.86
+background-blur = true
+
+background = #0C0B0A
+foreground = #A89070
+cursor-color = #FF8A3D
+cursor-text = #0C0B0A
+cursor-style = block
+cursor-style-blink = false
+selection-background = #221C18
+selection-foreground = #ECE6DA
+
+# Search and splits in the theme's colours (ghostty's stock yellow and orange otherwise).
+search-background = #5FB8FF
+search-foreground = #0C0B0A
+search-selected-background = #FF8A3D
+search-selected-foreground = #0C0B0A
+split-divider-color = #3A2E26
+unfocused-split-fill = #0C0B0A
+
+palette = 0=#0C0B0A
+palette = 1=#FF3B3B
+palette = 2=#5DA88A
+palette = 3=#C98A2E
+palette = 4=#4F8FD6
+palette = 5=#B85C8A
+palette = 6=#5FB8FF
+palette = 7=#A89070
+palette = 8=#7A6656
+palette = 9=#FF6B5E
+palette = 10=#7FCBA8
+palette = 11=#E8B45A
+palette = 12=#7FB4FF
+palette = 13=#D98AB0
+palette = 14=#9AD3FF
+palette = 15=#ECE6DA

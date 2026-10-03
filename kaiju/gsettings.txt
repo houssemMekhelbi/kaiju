@@ -1,0 +1,8 @@
+# org.gnome.desktop.interface keys applied by restore.sh (captured 2026-09-19)
+gtk-theme='Adwaita'
+icon-theme='Kaiju'
+color-scheme='prefer-dark'
+font-name='Archivo 10'
+monospace-font-name='Red Hat Mono 10'
+cursor-theme='KaijuClaw'
+cursor-size=24

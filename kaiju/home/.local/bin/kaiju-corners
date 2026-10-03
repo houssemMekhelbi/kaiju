@@ -1,0 +1,348 @@
+#!/usr/bin/env python3
+"""Kaiju window corners: the theme's two-step terrace (12px, then 6px) on the
+top-left and bottom-right corner of every tiled window.
+
+Hyprland can only clip a window with its rounding curve, so this is a fake: a
+click-through layer-shell surface covers each monitor (layer "top", above the
+windows) and, over each corner, paints what is behind a tiled window there,
+the wallpaper, in the shape of the cut, then draws the stepped border line.
+The focused window's cut gets a little Magma, because its glow would show
+there. It follows Hyprland's event socket and also polls the window list,
+since resizing with the mouse sends no events.
+
+Limits, by design:
+  - tiled windows only (behind a floating window there may be another window,
+    not the wallpaper); no patches while a special workspace is shown, on a
+    fullscreen window, or where a floating window covers the corner
+  - patches hide for a moment while windows animate, and trail a mouse resize
+  - the wallpaper is assumed to be ~/.config/hypr/kaiju/wallpaper.png, "cover"
+
+    kaiju-corners            run (started by hypr/kaiju.lua; exits by itself when
+                             hyprland.lua no longer requires "kaiju")
+    kaiju-corners off        stop it and keep it off (~/.config/hypr/kaiju/corners.off)
+    kaiju-corners on         allow it again and start it
+    kaiju-corners status
+"""
+
+import fcntl
+import json
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+RUNTIME = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+LOCK = os.path.join(RUNTIME, "kaiju-corners.lock")
+OFF = os.path.join(HOME, ".config/hypr/kaiju/corners.off")
+WALL = os.path.join(HOME, ".config/hypr/kaiju/wallpaper.png")
+HYPRLAND_LUA = os.path.join(HOME, ".config/hypr/hyprland.lua")
+
+A, B = 12, 6                      # the terrace: a 12px step, then a 6px step
+BORDER = 1                        # general.border_size in hypr/kaiju.lua
+EDGE_HI = (0xCF / 255, 0xC6 / 255, 0xB4 / 255)     # head of the border gradient (top-left)
+EDGE_LO = (0x5A / 255, 0x4E / 255, 0x44 / 255)     # its tail (bottom-right)
+MAGMA = (0xFF / 255, 0x8A / 255, 0x3D / 255)
+SETTLE_MS = 380                   # patches stay hidden this long after something that animates
+ANIMATING = {"openwindow", "closewindow", "movewindow", "movewindowv2", "workspace", "workspacev2",
+             "fullscreen", "changefloatingmode", "moveworkspace", "moveworkspacev2", "activespecial",
+             "activespecialv2", "focusedmon", "focusedmonv2", "monitoradded", "monitorremoved",
+             "monitoraddedv2", "monitorremovedv2"}
+
+
+def running_pid():
+    try:
+        with open(LOCK) as f:
+            pid = int(f.read().strip() or 0)
+        os.kill(pid, 0)
+        return pid
+    except (OSError, ValueError):
+        return 0
+
+
+def command(cmd):
+    if cmd == "off":
+        os.makedirs(os.path.dirname(OFF), exist_ok=True)
+        open(OFF, "w").close()
+        pid = running_pid()
+        if pid:
+            os.kill(pid, signal.SIGTERM)
+        print("kaiju-corners: off")
+    elif cmd == "on":
+        if os.path.exists(OFF):
+            os.remove(OFF)
+        if not running_pid():
+            subprocess.Popen([os.path.abspath(__file__)], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("kaiju-corners: on")
+    elif cmd == "status":
+        pid = running_pid()
+        print(f"running (pid {pid})" if pid else "not running", "· switched off" if os.path.exists(OFF) else "")
+    else:
+        print(__doc__)
+        return 2
+    return 0
+
+
+if len(sys.argv) > 1:
+    sys.exit(command(sys.argv[1]))
+if os.path.exists(OFF):
+    sys.exit(0)
+
+LIB = "/usr/lib/libgtk4-layer-shell.so"
+if LIB not in os.environ.get("LD_PRELOAD", ""):  # must load before libwayland
+    os.environ["LD_PRELOAD"] = f"{LIB} {os.environ.get('LD_PRELOAD', '')}".strip()
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+lock = open(LOCK, "a+")
+try:
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except OSError:
+    sys.exit(0)                   # already running (hypr/kaiju.lua starts it on every reload)
+lock.seek(0)
+lock.truncate()
+lock.write(str(os.getpid()))
+lock.flush()
+
+import gi  # noqa: E402
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk4LayerShell", "1.0")
+from gi.repository import Gdk, GLib, Gtk, Gtk4LayerShell as LS  # noqa: E402
+import cairo  # noqa: E402
+
+
+def hypr_dir():
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    base = os.path.join(RUNTIME, "hypr")
+    if not sig:
+        entries = sorted((e for e in os.scandir(base) if e.is_dir()), key=lambda e: e.stat().st_mtime, reverse=True)
+        sig = entries[0].name
+    return os.path.join(base, sig)
+
+
+HYPR = hypr_dir()
+
+
+def ask(request):
+    """One request on Hyprland's command socket (no hyprctl process per poll)."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(1.0)
+        s.connect(os.path.join(HYPR, ".socket.sock"))
+        s.sendall(request.encode())
+        chunks = []
+        while True:
+            data = s.recv(65536)
+            if not data:
+                break
+            chunks.append(data)
+    return json.loads(b"".join(chunks) or b"null")
+
+
+def theme_is_kaiju():
+    try:
+        with open(HYPRLAND_LUA, encoding="utf-8") as f:
+            return 'require("kaiju")' in f.read()
+    except OSError:
+        return False
+
+
+class Corners:
+    def __init__(self, app):
+        self.app = app
+        css = Gtk.CssProvider()           # without this the surface is an opaque theme-coloured sheet
+        css.load_from_data(b"window, window.background { background: transparent; }")
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.windows = {}             # connector name -> (Gtk window, drawing area)
+        self.patches = {}             # connector name -> [(x, y, w, h, active)] in monitor-local px
+        self.signature = None
+        self.hidden_until = 0.0
+        self.fast_until = 0.0
+        self.wall = cairo.ImageSurface.create_from_png(WALL) if os.path.exists(WALL) else None
+        self.sync_monitors()
+        Gdk.Display.get_default().get_monitors().connect("items-changed", lambda *_: self.sync_monitors())
+        self.listen()
+        GLib.timeout_add(50, self.tick)
+        GLib.timeout_add_seconds(5, self.still_wanted)
+
+    # ---- one transparent, click-through surface per monitor -------------------------------
+    def sync_monitors(self):
+        mons = Gdk.Display.get_default().get_monitors()
+        seen = set()
+        for i in range(mons.get_n_items()):
+            mon = mons.get_item(i)
+            name = mon.get_connector()
+            seen.add(name)
+            if name in self.windows:
+                continue
+            win = Gtk.ApplicationWindow(application=self.app)
+            LS.init_for_window(win)
+            LS.set_namespace(win, "kaiju-corners")
+            LS.set_layer(win, LS.Layer.TOP)
+            for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
+                LS.set_anchor(win, edge, True)
+            LS.set_exclusive_zone(win, -1)            # cover the whole output, under the bar's zone too
+            LS.set_keyboard_mode(win, LS.KeyboardMode.NONE)
+            LS.set_monitor(win, mon)
+            area = Gtk.DrawingArea()
+            area.set_draw_func(self.draw, name)
+            win.set_child(area)
+            win.connect("realize", lambda w: w.get_surface().set_input_region(cairo.Region()))
+            win.present()
+            self.windows[name] = (win, area)
+        for name in list(self.windows):
+            if name not in seen:
+                self.windows.pop(name)[0].destroy()
+        self.signature = None
+
+    # ---- Hyprland state ---------------------------------------------------------------------
+    def listen(self):
+        self.events = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.events.connect(os.path.join(HYPR, ".socket2.sock"))
+        self.events.setblocking(False)
+        self.buffer = b""
+        GLib.io_add_watch(self.events.fileno(), GLib.IO_IN | GLib.IO_HUP, self.on_event)
+
+    def on_event(self, _fd, condition):
+        if condition & GLib.IO_HUP:
+            self.app.quit()               # Hyprland went away
+            return False
+        try:
+            data = self.events.recv(65536)
+        except BlockingIOError:
+            return True
+        if not data:
+            self.app.quit()
+            return False
+        self.buffer += data
+        *lines, self.buffer = self.buffer.split(b"\n")
+        for line in lines:
+            name = line.split(b">>", 1)[0].decode(errors="replace")
+            if name in ANIMATING:
+                self.hidden_until = time.monotonic() + SETTLE_MS / 1000
+                self.signature = None
+            elif name == "configreloaded" and not theme_is_kaiju():
+                self.app.quit()
+                return False
+        self.fast_until = time.monotonic() + 1.0
+        return True
+
+    def still_wanted(self):
+        if not theme_is_kaiju() or os.path.exists(OFF):
+            self.app.quit()
+            return False
+        return True
+
+    def tick(self):
+        """Poll quickly while things are moving, slowly otherwise."""
+        now = time.monotonic()
+        if now >= self.fast_until and int(now * 20) % 4:     # idle: every 200 ms instead of every 50
+            return True
+        try:
+            clients, monitors = ask("j/clients"), ask("j/monitors")
+        except (OSError, ValueError):
+            return True
+        hidden = now < self.hidden_until
+        signature = (hidden, json.dumps([[c["address"], c["at"], c["size"], c["workspace"]["id"], c["floating"],
+                                          c["fullscreen"], c["hidden"], c["focusHistoryID"]] for c in clients]),
+                     json.dumps([[m["name"], m["activeWorkspace"]["id"], m["specialWorkspace"]["id"], m["x"], m["y"],
+                                  m["scale"]] for m in monitors]))
+        if signature == self.signature:
+            return True
+        self.signature = signature
+        self.fast_until = now + 0.6
+        self.patches = {} if hidden else self.compute(clients, monitors)
+        for _win, area in self.windows.values():
+            area.queue_draw()
+        return True
+
+    def compute(self, clients, monitors):
+        out = {}
+        for m in monitors:
+            if m["specialWorkspace"]["id"]:
+                continue                  # a scratchpad is up: behind its windows are other windows
+            ws, scale = m["activeWorkspace"]["id"], m["scale"] or 1
+            shown = [c for c in clients if c["workspace"]["id"] == ws and c["mapped"] and not c["hidden"]]
+            floating = [c for c in shown if c["floating"]] + [c for c in clients if c.get("pinned") and c["mapped"]]
+            rows = []
+            for c in shown:
+                if c["floating"] or c["fullscreen"]:
+                    continue
+                x, y = c["at"][0] - BORDER, c["at"][1] - BORDER
+                w, h = c["size"][0] + 2 * BORDER, c["size"][1] + 2 * BORDER
+                corners = {"tl": (x, y, A, A), "br": (x + w - A, y + h - A, A, A)}
+                for f in floating:        # a floating window over a corner: leave that corner alone
+                    fx, fy, fw, fh = f["at"][0] - 2, f["at"][1] - 2, f["size"][0] + 4, f["size"][1] + 4
+                    for key, (cx, cy, cw, ch) in list(corners.items()):
+                        if cx < fx + fw and cx + cw > fx and cy < fy + fh and cy + ch > fy:
+                            del corners[key]
+                rows.append(((x - m["x"]) / scale, (y - m["y"]) / scale, w / scale, h / scale,
+                             c["focusHistoryID"] == 0, tuple(corners)))
+            out[m["name"]] = rows
+        return out
+
+    # ---- drawing ------------------------------------------------------------------------------
+    def draw(self, _area, cr, width, height, name):
+        rows = self.patches.get(name)
+        if not rows:
+            return
+        for x, y, w, h, active, corners in rows:
+            for corner in corners:
+                if corner == "tl":
+                    cut = [(x, y, A, B), (x, y + B, B, A - B)]
+                    line = [(x + 0.5, y + A + 0.5), (x + B + 0.5, y + A + 0.5), (x + B + 0.5, y + B + 0.5),
+                            (x + A + 0.5, y + B + 0.5), (x + A + 0.5, y + 0.5)]
+                    rgb, alpha = EDGE_HI, (1.0 if active else 0.14)
+                else:
+                    r, b = x + w, y + h
+                    cut = [(r - A, b - B, A, B), (r - B, b - A, B, A - B)]
+                    line = [(r - 0.5, b - A - 0.5), (r - B - 0.5, b - A - 0.5), (r - B - 0.5, b - B - 0.5),
+                            (r - A - 0.5, b - B - 0.5), (r - A - 0.5, b - 0.5)]
+                    rgb, alpha = (EDGE_LO, 0.45) if active else (EDGE_HI, 0.14)
+                cr.save()
+                for rect in cut:
+                    cr.rectangle(*rect)
+                cr.clip()
+                self.paint_wallpaper(cr, width, height)
+                # what the window's shadow does to the wallpaper around the corner: the
+                # focused window glows Magma, the others cast a plain dark shadow
+                cr.set_source_rgba(*(MAGMA + (0.11,) if active else (0, 0, 0, 0.30)))
+                cr.paint()
+                cr.restore()
+                cr.move_to(*line[0])
+                for p in line[1:]:
+                    cr.line_to(*p)
+                cr.set_source_rgba(*rgb, alpha)
+                cr.set_line_width(1)
+                cr.stroke()
+
+    def paint_wallpaper(self, cr, width, height):
+        if not self.wall:
+            cr.set_source_rgb(0x0C / 255, 0x0B / 255, 0x0A / 255)
+            cr.paint()
+            return
+        ww, wh = self.wall.get_width(), self.wall.get_height()
+        s = max(width / ww, height / wh)              # hyprpaper fit_mode = cover
+        cr.save()
+        cr.translate((width - ww * s) / 2, (height - wh * s) / 2)
+        cr.scale(s, s)
+        cr.set_source_surface(self.wall, 0, 0)
+        cr.paint()
+        cr.restore()
+
+
+def main():
+    if not theme_is_kaiju():
+        return 0
+    app = Gtk.Application(application_id=None)
+    app.connect("activate", lambda a: (a.hold(), setattr(a, "corners", Corners(a))))
+    signal.signal(signal.SIGTERM, lambda *_: app.quit())
+    GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, lambda: (app.quit(), False)[1])
+    app.run([])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,311 @@
+/* Kaiju bar, accent choice E ("magma under rock"): edges are cold (ash to
+ * stone), the light behind the plates is Magma, Spine blue only colours small
+ * data text. Three Slag plates at 78% with that glow behind them. The
+ * left plate has the 12/6 terrace cut top-left and sawtooth teeth on its right
+ * end; the centre plate has teeth on both ends; the right plate has teeth on
+ * its left end and the terrace bottom-right. The ends are PNG caps in each
+ * box's side padding (kaiju/{l,c,r}-{start,end}.png from
+ * ~/.config/hypr/kaiju/build-art.py); the body is a gradient: an ash line on
+ * top, Slag, a stone line below. The waybar window carries no margins in
+ * config.jsonc: the boxes have them here, so the glow has room inside the
+ * layer surface. Workspaces are plates (triangles) drawn as images per state.
+ * Type: Archivo labels in Magma caps, Red Hat Mono values.
+ * Magma is attention, Ember structure, Spine cold data, Blaze failure. */
+
+@define-color ground #0C0B0A;
+@define-color slag   #161311;
+@define-color raised #221C18;
+@define-color hair   #3A2E26;
+@define-color dim    #7A6656;
+@define-color ochre  #A89070;
+@define-color ash    #ECE6DA;
+@define-color ember  #9E3B14;
+@define-color magma  #FF8A3D;
+@define-color edge   #CFC6B4;
+@define-color stone  #5A4E44;
+@define-color spine  #5FB8FF;
+@define-color blaze  #FF3B3B;
+
+* {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    font-family: "Archivo", "IBM Plex Sans Arabic", "JetBrainsMono Nerd Font", sans-serif;
+    font-size: 12px;
+}
+
+window#waybar {
+    background: transparent;
+    color: @ash;
+}
+
+tooltip {
+    background: alpha(@slag, 0.96);
+    border: 1px solid alpha(@edge, 0.20);
+}
+
+tooltip label {
+    padding: 4px;
+    color: @ash;
+    font-family: "Red Hat Mono", "JetBrainsMono Nerd Font", monospace;
+}
+
+/* ---- the plates -------------------------------------------------------- */
+/* The box padding equals the cap width on each side, so caps and body never
+ * overlap. 36px plate, 10px above and 12px below it for the glow. */
+
+.modules-left,
+.modules-center,
+.modules-right {
+    margin: 10px 0 12px 0;
+    box-shadow: 0 0 14px alpha(@magma, 0.36);
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-position: left top, right top, left top;
+    background-origin: border-box, border-box, content-box;
+    background-clip: border-box, border-box, content-box;
+}
+
+.modules-left {
+    margin-left: 14px;
+    padding: 0 8px 0 12px;
+    background-size: 12px 36px, 8px 36px, 100% 36px;
+    background-image:
+        url("kaiju/l-start.png"),
+        url("kaiju/l-end.png"),
+        linear-gradient(to bottom,
+            alpha(@edge, 0.55) 0px, alpha(@edge, 0.55) 1px,
+            alpha(@slag, 0.78) 1px, alpha(@slag, 0.78) 35px,
+            @stone 35px, @stone 36px);
+}
+
+.modules-center {
+    padding: 0 8px;
+    background-size: 8px 36px, 8px 36px, 100% 36px;
+    background-image:
+        url("kaiju/c-start.png"),
+        url("kaiju/c-end.png"),
+        linear-gradient(to bottom,
+            alpha(@edge, 0.55) 0px, alpha(@edge, 0.55) 1px,
+            alpha(@slag, 0.78) 1px, alpha(@slag, 0.78) 35px,
+            @stone 35px, @stone 36px);
+}
+
+.modules-right {
+    margin-right: 14px;
+    padding: 0 12px 0 8px;
+    background-size: 8px 36px, 12px 36px, 100% 36px;
+    background-image:
+        url("kaiju/r-start.png"),
+        url("kaiju/r-end.png"),
+        linear-gradient(to bottom,
+            alpha(@edge, 0.55) 0px, alpha(@edge, 0.55) 1px,
+            alpha(@slag, 0.78) 1px, alpha(@slag, 0.78) 35px,
+            @stone 35px, @stone 36px);
+}
+
+window#waybar.empty #window {
+    border-left: none;
+}
+
+/* ---- workspaces: plates ---------------------------------------------- */
+/* hattin-workspaces prints a glyph per slot; here the glyph is hidden and the
+ * state class picks an image: outline empty, Ember occupied, half Magma when
+ * active on another monitor, Magma with a Charcoal spine line when focused,
+ * Blaze urgent. The foreign slot stays text (its count varies): one ╱ per
+ * workspace, the claw, in Spine. */
+
+#custom-ws-1, #custom-ws-2, #custom-ws-3, #custom-ws-4, #custom-ws-5,
+#custom-ws-6, #custom-ws-7, #custom-ws-8, #custom-ws-9, #custom-ws-10 {
+    min-width: 22px;
+    padding: 0;
+    margin: 8px 0;
+    color: transparent;
+    font-size: 12px;
+    background-image: url("kaiju/ws-occupied.png");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 18px 18px;
+}
+
+#custom-ws-1 {
+    margin-left: 6px;
+}
+
+#custom-ws-1.empty, #custom-ws-2.empty, #custom-ws-3.empty, #custom-ws-4.empty,
+#custom-ws-5.empty, #custom-ws-6.empty, #custom-ws-7.empty, #custom-ws-8.empty,
+#custom-ws-9.empty, #custom-ws-10.empty {
+    background-image: url("kaiju/ws-empty.png");
+}
+
+#custom-ws-1.active, #custom-ws-2.active, #custom-ws-3.active, #custom-ws-4.active,
+#custom-ws-5.active, #custom-ws-6.active, #custom-ws-7.active, #custom-ws-8.active,
+#custom-ws-9.active, #custom-ws-10.active {
+    background-image: url("kaiju/ws-active.png");
+}
+
+#custom-ws-1.focused, #custom-ws-2.focused, #custom-ws-3.focused, #custom-ws-4.focused,
+#custom-ws-5.focused, #custom-ws-6.focused, #custom-ws-7.focused, #custom-ws-8.focused,
+#custom-ws-9.focused, #custom-ws-10.focused {
+    background-image: url("kaiju/ws-focused.png");
+}
+
+#custom-ws-1.urgent, #custom-ws-2.urgent, #custom-ws-3.urgent, #custom-ws-4.urgent,
+#custom-ws-5.urgent, #custom-ws-6.urgent, #custom-ws-7.urgent, #custom-ws-8.urgent,
+#custom-ws-9.urgent, #custom-ws-10.urgent {
+    background-image: url("kaiju/ws-urgent.png");
+}
+
+#custom-ws-x {
+    min-width: 0;
+    padding: 0 6px 0 4px;
+    color: @spine;
+    font-family: "DejaVu Sans Mono", "JetBrainsMono Nerd Font", monospace;
+    font-size: 11px;
+    letter-spacing: -2px;
+}
+
+#custom-ws-x.active {
+    color: @magma;
+}
+
+#custom-ws-1:hover, #custom-ws-2:hover, #custom-ws-3:hover, #custom-ws-4:hover,
+#custom-ws-5:hover, #custom-ws-6:hover, #custom-ws-7:hover, #custom-ws-8:hover,
+#custom-ws-9:hover, #custom-ws-10:hover, #custom-ws-x:hover {
+    background-color: alpha(@magma, 0.12);
+}
+
+/* ---- next prayer (custom/mawaqit) ------------------------------------ */
+/* City in Magma caps, prayer in Ochre, time in Ash (markup from
+ * waybar-mawaqit); classes: soon (<15m, time in Magma), iqama, error. */
+
+#custom-mawaqit {
+    padding: 0 6px 0 12px;
+    margin: 10px 0 10px 8px;
+    border-left: 1px solid alpha(@edge, 0.20);
+    color: @ash;
+    font-family: "Red Hat Mono", "JetBrainsMono Nerd Font", monospace;
+    font-size: 11px;
+}
+
+#custom-mawaqit.error,
+#custom-mawaqit.unset {
+    color: @ochre;
+}
+
+#window {
+    padding: 0 10px 0 12px;
+    margin: 10px 0 10px 8px;
+    border-left: 1px solid alpha(@edge, 0.20);
+    color: @ochre;
+    font-size: 11px;
+}
+
+/* ---- instrument cluster ------------------------------------------------ */
+
+#custom-proton,
+#custom-tailscale,
+#network,
+#wireplumber,
+#bluetooth,
+#cpu,
+#memory,
+#temperature,
+#custom-nvidia,
+#power-profiles-daemon,
+#battery,
+#tray,
+#custom-tray-leader,
+#custom-notifications,
+#custom-idle,
+#custom-yawm {
+    padding: 0 9px;
+    margin: 10px 0;
+    border-right: 1px solid alpha(@edge, 0.20);
+    color: @ash;
+    font-family: "Red Hat Mono", "JetBrainsMono Nerd Font", monospace;
+    font-size: 11px;
+}
+
+#custom-yawm {
+    border-right: none;
+    margin-right: 4px;
+}
+
+#clock {
+    padding: 0 12px;
+    color: @ash;
+    font-family: "Red Hat Mono", "JetBrainsMono Nerd Font", monospace;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+#power-profiles-daemon {
+    color: @ochre;
+}
+
+#custom-proton.up,
+#custom-tailscale.up {
+    color: @spine;
+}
+
+#custom-proton.down,
+#custom-tailscale.down {
+    color: @blaze;
+}
+
+/* due today: Magma; overdue: Blaze block with Charcoal text (Ash on Blaze is only 2.8:1) */
+#custom-yawm.due {
+    color: @magma;
+}
+
+#custom-yawm.overdue {
+    color: @ground;
+    background: @blaze;
+}
+
+#custom-nvidia.active {
+    color: @spine;
+}
+
+#custom-idle.off,
+#battery.warning,
+#temperature.critical {
+    color: @magma;
+}
+
+#battery.critical {
+    color: @ground;
+    background: @blaze;
+}
+
+/* ---- click-to-reveal groups (NET, SYS, ▵) ------------------------------ */
+
+#custom-tray-leader {
+    color: @ember;
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 12px;
+}
+
+#tray {
+    margin: 8px 0;
+}
+
+.drawer-hidden {
+    background: alpha(@raised, 0.9);
+}
+
+#network:hover,
+#cpu:hover,
+#custom-tray-leader:hover,
+#custom-mawaqit:hover,
+#custom-yawm:hover {
+    background-color: alpha(@magma, 0.10);
+}
+
+#tray menu {
+    background: @slag;
+    border: 1px solid alpha(@edge, 0.20);
+    color: @ash;
+}
